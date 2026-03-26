@@ -17,7 +17,7 @@ PROTOCOL_H = $(addprefix $(BUILD_DIR)/, $(WAYLAND_PROTOCOLS:$(PROTOCOL_DIR)/%.xm
 INCLUDE = -I $(BUILD_DIR) -I include
 
 # 库
-LIBS = -lwayland-client
+LIBS = -lwayland-client -lm
 
 # 编译标志
 FLAGS = -Wall -Werror -Wextra -Wno-unused-parameter -Wno-unused-function
@@ -37,22 +37,22 @@ $(BUILD_DIR):
 
 # 处理 Wayland 协议 XML 文件
 $(BUILD_DIR)/%-protocol.c: $(PROTOCOL_DIR)/%.xml | $(BUILD_DIR)
-	@wayland-scanner private-code < $< > $@
+	wayland-scanner private-code < $< > $@
 
 $(BUILD_DIR)/%-protocol.h: $(PROTOCOL_DIR)/%.xml | $(BUILD_DIR)
-	@wayland-scanner client-header < $< > $@
+	wayland-scanner client-header < $< > $@
 
 # 编译对象文件
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c $(PROTOCOL_H) | $(BUILD_DIR)
-	@$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 # 编译协议对象文件
 $(BUILD_DIR)/%-protocol.o: $(BUILD_DIR)/%-protocol.c $(BUILD_DIR)/%-protocol.h | $(BUILD_DIR)
-	@$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 # 链接最终目标程序
 $(TARGET): $(OBJ) $(PROTOCOL_C:.c=.o)
-	@$(CC) $^ $(LIBS) -o $@
+	$(CC) $^ $(LIBS) -o $@
 	@echo "构建成功：$(TARGET)"
 
 # 清理构建产物（保留生成的 protocol 代码和头文件）
