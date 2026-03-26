@@ -31,4 +31,8 @@ int mark_busy(struct shm_pool* pool, struct wl_buffer *buffer);
 
 int mark_idle(struct shm_pool* pool, struct wl_buffer *buffer);
 
+void shm_pool_destroy(struct shm_pool* pool);
+
+void shm_pool_unmap_buffers(struct shm_pool* pool);
+
 #endif

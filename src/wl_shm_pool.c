@@ -13,7 +13,10 @@ int create_shm_buffer(struct shm_pool *shm_pool) {
     shm_pool->shm_buffers[i] =
         (struct shm_buffer *)malloc(sizeof(struct shm_buffer));
 
-
+    if (!shm_pool->shm_buffers[i]) {
+      ERR("malloc shm_buffer error");
+      return 1;
+    }
 
     shm_pool->shm_buffers[i]->buffer = wl_shm_pool_create_buffer(
         shm_pool->wl_shm_pool,
@@ -43,8 +46,24 @@ int wl_shm_pool_init(struct wayland_state *state,
   LOG("begine shm pool init");
   struct shm_pool *shm_pool =
       (struct shm_pool *)malloc(sizeof(struct shm_pool));
+  if (!shm_pool) {
+    ERR("malloc shm_pool error");
+    return 1;
+  }
+
   shm_pool->shm_buffers =
       (struct shm_buffer **)malloc(sizeof(struct shm_buffer *) * buffer_count);
+  if (!shm_pool->shm_buffers) {
+    ERR("malloc shm_buffers error");
+    free(shm_pool);
+    return 1;
+  }
+
+  // Initialize shm_buffers to NULL
+  for (int i = 0; i < buffer_count; i++) {
+    shm_pool->shm_buffers[i] = NULL;
+  }
+
   shm_pool->buffer_count = buffer_count;
   shm_pool->buffer_width = output_info->src_width;
   shm_pool->buffer_height = output_info->src_height;
@@ -56,12 +75,16 @@ int wl_shm_pool_init(struct wayland_state *state,
   int fd = memfd_create("zpaper-shm-pool", MFD_CLOEXEC);
   if (fd < 0) {
     ERR("memfd_create error");
+    free(shm_pool->shm_buffers);
+    free(shm_pool);
     return 1;
   }
 
   if (ftruncate(fd, pool_size) < 0) {
     ERR("ftruncate error");
     close(fd);
+    free(shm_pool->shm_buffers);
+    free(shm_pool);
     return 1;
   }
 
@@ -69,6 +92,8 @@ int wl_shm_pool_init(struct wayland_state *state,
   if (!shm_pool->wl_shm_pool) {
     ERR("create shm pool error");
     close(fd);
+    free(shm_pool->shm_buffers);
+    free(shm_pool);
     return 1;
   }
   shm_pool->fd = fd;
@@ -78,7 +103,26 @@ int wl_shm_pool_init(struct wayland_state *state,
   int ret = create_shm_buffer(shm_pool);
   if (ret) {
     ERR("create shm buffer error");
+    // Cleanup partially created buffers
+    if (shm_pool->shm_buffers) {
+      for (int i = 0; i < buffer_count; i++) {
+        if (shm_pool->shm_buffers[i]) {
+          if (shm_pool->shm_buffers[i]->data) {
+            munmap(shm_pool->shm_buffers[i]->data, shm_pool->ssize);
+          }
+          if (shm_pool->shm_buffers[i]->buffer) {
+            wl_buffer_destroy(shm_pool->shm_buffers[i]->buffer);
+          }
+          free(shm_pool->shm_buffers[i]);
+        }
+      }
+      free(shm_pool->shm_buffers);
+    }
+    if (shm_pool->wl_shm_pool) {
+      wl_shm_pool_destroy(shm_pool->wl_shm_pool);
+    }
     close(fd);
+    free(shm_pool);
     return 1;
   }
   LOG("shm pool init successful");
@@ -102,4 +146,62 @@ struct shm_buffer *get_shm_buffer(struct shm_pool* pool) {
 int mark_busy(struct shm_pool* pool, struct wl_buffer *buffer);
 
 int mark_idle(struct shm_pool* pool, struct wl_buffer *buffer);
+
+void shm_pool_unmap_buffers(struct shm_pool* pool) {
+  if (!pool || !pool->shm_buffers) {
+    return;
+  }
+
+  for (int i = 0; i < pool->buffer_count; i++) {
+    struct shm_buffer *buf = pool->shm_buffers[i];
+    if (buf && buf->data) {
+      munmap(buf->data, pool->ssize);
+      buf->data = NULL;
+    }
+  }
+}
+
+void shm_pool_destroy(struct shm_pool* pool) {
+  if (!pool) {
+    return;
+  }
+
+  // Destroy all buffers and unmap memory
+  if (pool->shm_buffers) {
+    for (int i = 0; i < pool->buffer_count; i++) {
+      struct shm_buffer *buf = pool->shm_buffers[i];
+      if (buf) {
+        // Unmap memory
+        if (buf->data) {
+          munmap(buf->data, pool->ssize);
+          buf->data = NULL;
+        }
+        // Destroy wl_buffer
+        if (buf->buffer) {
+          wl_buffer_destroy(buf->buffer);
+          buf->buffer = NULL;
+        }
+        free(buf);
+        pool->shm_buffers[i] = NULL;
+      }
+    }
+    free(pool->shm_buffers);
+    pool->shm_buffers = NULL;
+  }
+
+  // Destroy wl_shm_pool
+  if (pool->wl_shm_pool) {
+    wl_shm_pool_destroy(pool->wl_shm_pool);
+    pool->wl_shm_pool = NULL;
+  }
+
+  // Close file descriptor
+  if (pool->fd >= 0) {
+    close(pool->fd);
+    pool->fd = -1;
+  }
+
+  // Free the pool structure
+  free(pool);
+}
 
