@@ -1,0 +1,102 @@
+[
+  {
+    "file": "src/main.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-O0",
+      "-I",
+      "build",
+      "-I",
+      "include",
+      "-Wall",
+      "-Werror",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-Wno-unused-function",
+      "-MMD",
+      "-MP",
+      "-c",
+      "src/main.c",
+      "-o",
+      "build/main.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/zpaper",
+    "output": "build/main.o"
+  },
+  {
+    "file": "build/linux-dmabuf-v1-protocol.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-O0",
+      "-I",
+      "build",
+      "-I",
+      "include",
+      "-Wall",
+      "-Werror",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-Wno-unused-function",
+      "-MMD",
+      "-MP",
+      "-c",
+      "build/linux-dmabuf-v1-protocol.c",
+      "-o",
+      "build/linux-dmabuf-v1-protocol.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/zpaper",
+    "output": "build/linux-dmabuf-v1-protocol.o"
+  },
+  {
+    "file": "build/wlr-layer-shell-unstable-v1-protocol.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-O0",
+      "-I",
+      "build",
+      "-I",
+      "include",
+      "-Wall",
+      "-Werror",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-Wno-unused-function",
+      "-MMD",
+      "-MP",
+      "-c",
+      "build/wlr-layer-shell-unstable-v1-protocol.c",
+      "-o",
+      "build/wlr-layer-shell-unstable-v1-protocol.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/zpaper",
+    "output": "build/wlr-layer-shell-unstable-v1-protocol.o"
+  },
+  {
+    "file": "build/xdg-shell-protocol.c",
+    "arguments": [
+      "gcc",
+      "-g",
+      "-O0",
+      "-I",
+      "build",
+      "-I",
+      "include",
+      "-Wall",
+      "-Werror",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-Wno-unused-function",
+      "-MMD",
+      "-MP",
+      "-c",
+      "build/xdg-shell-protocol.c",
+      "-o",
+      "build/xdg-shell-protocol.o"
+    ],
+    "directory": "/mnt/newdisk/Project/C-project/zpaper",
+    "output": "build/xdg-shell-protocol.o"
+  }
+]

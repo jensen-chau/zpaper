@@ -26,6 +26,9 @@ CFLAGS = -g -O0 $(INCLUDE) $(FLAGS) -MMD -MP
 # 默认目标
 .PHONY: all clean install uninstall
 
+# 标记生成的协议文件为珍贵文件，防止 make 自动删除
+.PRECIOUS: $(PROTOCOL_C) $(PROTOCOL_H)
+
 all: $(TARGET) | $(BUILD_DIR)
 
 # 创建构建目录
@@ -52,10 +55,10 @@ $(TARGET): $(OBJ) $(PROTOCOL_C:.c=.o)
 	@$(CC) $^ $(LIBS) -o $@
 	@echo "构建成功：$(TARGET)"
 
-# 清理构建产物
+# 清理构建产物（保留生成的 protocol 代码和头文件）
 clean:
-	@rm -rf $(BUILD_DIR)
 	@rm -f $(TARGET)
+	@rm -rf $(BUILD_DIR)
 	@echo "清理完成"
 
 # 包含依赖文件
