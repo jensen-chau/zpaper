@@ -1,10 +1,11 @@
+#define _GNU_SOURCE
 #include "wl_shm_pool.h"
 #include "utils.h"
 #include <stdint.h>
 #include <stdlib.h>
-#include <sys/shm.h>
-#include <wayland-client-protocol.h>
 #include <sys/mman.h>
+#include <unistd.h>
+#include <wayland-client-protocol.h>
 #include "wayland_state.h"
 
 int create_shm_buffer(struct shm_pool *shm_pool) {
@@ -26,11 +27,12 @@ int create_shm_buffer(struct shm_pool *shm_pool) {
     }
 
     shm_pool->shm_buffers[i]->busy = 0;
-    void* ret = mmap(shm_pool->shm_buffers[i]->data, shm_pool->ssize, PROT_READ | PROT_WRITE, MAP_SHARED, shm_pool->fd, shm_pool->ssize * i);
+    void* ret = mmap(NULL, shm_pool->ssize, PROT_READ | PROT_WRITE, MAP_SHARED, shm_pool->fd, shm_pool->ssize * i);
     if (ret == MAP_FAILED) {
       ERR("mmap error");
       return 1;
     }
+    shm_pool->shm_buffers[i]->data = ret;
   }
 
   return 0;
@@ -48,18 +50,25 @@ int wl_shm_pool_init(struct wayland_state *state,
   shm_pool->buffer_height = output_info->src_height;
 
   struct wl_shm *shm = state->shm;
-  int64_t pool_size = output_info->src_width * output_info->src_height * sizeof(int);
+  int64_t pool_size = output_info->src_width * output_info->src_height * sizeof(int) * buffer_count;
 
-  shm_pool->ssize = pool_size;
-  int fd = shmget(1234, pool_size, SHM_R | SHM_W);
+  shm_pool->ssize = output_info->src_width * output_info->src_height * sizeof(int);
+  int fd = memfd_create("zpaper-shm-pool", MFD_CLOEXEC);
   if (fd < 0) {
-    ERR("shmget error");
+    ERR("memfd_create error");
+    return 1;
+  }
+
+  if (ftruncate(fd, pool_size) < 0) {
+    ERR("ftruncate error");
+    close(fd);
     return 1;
   }
 
   shm_pool->wl_shm_pool = wl_shm_create_pool(shm, fd, pool_size);
   if (!shm_pool->wl_shm_pool) {
     ERR("create shm pool error");
+    close(fd);
     return 1;
   }
   shm_pool->fd = fd;
@@ -69,6 +78,7 @@ int wl_shm_pool_init(struct wayland_state *state,
   int ret = create_shm_buffer(shm_pool);
   if (ret) {
     ERR("create shm buffer error");
+    close(fd);
     return 1;
   }
   LOG("shm pool init successful");

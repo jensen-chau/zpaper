@@ -65,7 +65,10 @@ void configure(void *data, struct zwlr_layer_surface_v1 *zwlr_layer_surface_v1,
   for (int i = 0; i < state->output_count; i++) {
     if (state->output_infos[i]->layer_surface == zwlr_layer_surface_v1) {
       state->output_infos[i]->is_configured = 1;
-      LOG("output: %d configure", i);
+      state->output_infos[i]->width = width;
+      state->output_infos[i]->height = height;
+      LOG("output: %d configure, width: %d, height: %d", i, width, height);
+      zwlr_layer_surface_v1_ack_configure(zwlr_layer_surface_v1, serial);
     }
   }
 }
