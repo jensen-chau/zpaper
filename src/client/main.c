@@ -1,4 +1,5 @@
 #include "ipc.h"
+#include "wallpaper.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,7 +18,8 @@ static char *get_socket_path(void) {
   return path;
 }
 
-static int send_command(const char *cmd, const char *output, const char *path) {
+static int send_command(const char *cmd, const char *output, const char *path,
+                        wallpaper_type_t type) {
   int fd;
   char *socket_path = get_socket_path();
 
@@ -28,10 +30,15 @@ static int send_command(const char *cmd, const char *output, const char *path) {
 
   char buf[IPC_MAX_MSG_SIZE];
   if (path) {
-    snprintf(buf, sizeof(buf), "%s %s", cmd, path);
     if (output) {
+      snprintf(buf, sizeof(buf), "%s %s %s", cmd, path, output);
+    } else {
+      snprintf(buf, sizeof(buf), "%s %s", cmd, path);
+    }
+    if (type != WALLPAPER_TYPE_UNKNOWN) {
       size_t len = strlen(buf);
-      snprintf(buf + len, sizeof(buf) - len, " %s", output);
+      snprintf(buf + len, sizeof(buf) - len, " --type=%s",
+               wallpaper_type_to_string(type));
     }
   } else if (output) {
     snprintf(buf, sizeof(buf), "%s %s", cmd, output);
@@ -75,7 +82,9 @@ static int start_daemon(void) {
   return 0;
 }
 
-static int stop_daemon(void) { return send_command("QUIT", NULL, NULL); }
+static int stop_daemon(void) {
+  return send_command("QUIT", NULL, NULL, WALLPAPER_TYPE_UNKNOWN);
+}
 
 static int show_status(void) {
   int fd;
@@ -94,13 +103,14 @@ static int show_status(void) {
 static void usage(const char *prog) {
   printf("Usage: %s <command> [options]\n\n", prog);
   printf("Commands:\n");
-  printf("  start         Start the daemon\n");
-  printf("  stop          Stop the daemon\n");
-  printf("  status        Check daemon status\n");
-  printf("  set <path> [output]  Set wallpaper\n");
-  printf("  get [output]  Get current wallpaper\n");
-  printf("  list          List outputs and wallpapers\n");
-  printf("  reload        Reload configuration\n");
+  printf("  start                        Start the daemon\n");
+  printf("  stop                         Stop the daemon\n");
+  printf("  status                       Check daemon status\n");
+  printf("  set [options] <path> [output]  Set wallpaper\n");
+  printf("    --type=<type>  Wallpaper type: static, video, web, vulkan\n");
+  printf("  get [output]                 Get current wallpaper\n");
+  printf("  list                         List outputs and wallpapers\n");
+  printf("  reload                       Reload configuration\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -118,20 +128,38 @@ int main(int argc, char *argv[]) {
   } else if (strcmp(cmd, "status") == 0) {
     return show_status();
   } else if (strcmp(cmd, "set") == 0) {
-    if (argc < 3) {
+    wallpaper_type_t type = WALLPAPER_TYPE_UNKNOWN;
+    const char *path = NULL;
+    const char *output = NULL;
+
+    for (int i = 2; i < argc; i++) {
+      if (strncmp(argv[i], "--type=", 7) == 0) {
+        type = wallpaper_type_from_string(argv[i] + 7);
+        if (type == WALLPAPER_TYPE_UNKNOWN) {
+          fprintf(stderr, "Error: Unknown wallpaper type '%s'\n", argv[i] + 7);
+          return 1;
+        }
+      } else if (argv[i][0] != '-') {
+        path = argv[i];
+        if (i + 1 < argc && argv[i + 1][0] != '-') {
+          output = argv[i + 1];
+          i++;
+        }
+      }
+    }
+
+    if (!path) {
       fprintf(stderr, "Error: Missing wallpaper path\n");
       return 1;
     }
-    const char *path = argv[2];
-    const char *output = (argc > 3) ? argv[3] : NULL;
-    return send_command("SET", output, path);
+    return send_command("SET", output, path, type);
   } else if (strcmp(cmd, "get") == 0) {
     const char *output = (argc > 2) ? argv[2] : NULL;
-    return send_command("GET", output, NULL);
+    return send_command("GET", output, NULL, WALLPAPER_TYPE_UNKNOWN);
   } else if (strcmp(cmd, "list") == 0) {
-    return send_command("LIST", NULL, NULL);
+    return send_command("LIST", NULL, NULL, WALLPAPER_TYPE_UNKNOWN);
   } else if (strcmp(cmd, "reload") == 0) {
-    return send_command("RELOAD", NULL, NULL);
+    return send_command("RELOAD", NULL, NULL, WALLPAPER_TYPE_UNKNOWN);
   } else {
     fprintf(stderr, "Unknown command: %s\n", cmd);
     usage(argv[0]);

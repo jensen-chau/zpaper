@@ -48,6 +48,8 @@ static int daemon_render_all(zpaper_daemon_t *daemon) {
     struct output_info *output = daemon->wl_state->output_infos[i];
     const char *wallpaper_path =
         config_get_wallpaper(&daemon->config, output->name);
+    wallpaper_type_t wallpaper_type =
+        config_get_wallpaper_type(&daemon->config, output->name);
 
     if (!wallpaper_path) {
       continue;
@@ -59,7 +61,7 @@ static int daemon_render_all(zpaper_daemon_t *daemon) {
     }
 
     wallpaper_handler_t *handler =
-        wallpaper_create(wallpaper_path, daemon->wl_state);
+        wallpaper_create(wallpaper_path, daemon->wl_state, wallpaper_type);
     if (!handler) {
       ERR("failed to create wallpaper handler for %s", wallpaper_path);
       continue;
@@ -78,31 +80,79 @@ static int daemon_render_all(zpaper_daemon_t *daemon) {
 
 static int handle_ipc_command(zpaper_daemon_t *daemon, ipc_cmd_t cmd,
                               const char *output_name,
-                              const char *wallpaper_path) {
+                              const char *wallpaper_path,
+                              wallpaper_type_t wallpaper_type,
+                              char *response_buf, size_t resp_size) {
   switch (cmd) {
   case IPC_CMD_SET:
-    if (daemon_set_wallpaper(daemon, output_name, wallpaper_path) == 0) {
+    if (daemon_set_wallpaper(daemon, output_name, wallpaper_path,
+                             wallpaper_type) == 0) {
       config_save(config_get_default_path(), &daemon->config);
       daemon_render_all(daemon);
       wl_display_flush(daemon->wl_state->display);
+      snprintf(response_buf, resp_size, "OK\n");
       return 0;
     }
+    snprintf(response_buf, resp_size, "ERROR: Failed to set wallpaper\n");
     return -1;
 
-  case IPC_CMD_GET:
+  case IPC_CMD_GET: {
+    const char *wallpaper = daemon_get_wallpaper(daemon, output_name);
+    if (wallpaper) {
+      snprintf(response_buf, resp_size, "%s\n", wallpaper);
+    } else {
+      snprintf(response_buf, resp_size, "No wallpaper set\n");
+    }
     return 0;
+  }
 
-  case IPC_CMD_LIST:
+  case IPC_CMD_LIST: {
+    char *p = response_buf;
+    size_t remaining = resp_size;
+    int printed = 0;
+
+    for (int i = 0; i < daemon->wl_state->output_count; i++) {
+      struct output_info *output = daemon->wl_state->output_infos[i];
+      const char *wallpaper =
+          config_get_wallpaper(&daemon->config, output->name);
+      wallpaper_type_t type =
+          config_get_wallpaper_type(&daemon->config, output->name);
+      int len;
+      if (wallpaper) {
+        len = snprintf(p, remaining, "%s [%s]: %s\n", output->name,
+                       wallpaper_type_to_string(type), wallpaper);
+      } else {
+        len = snprintf(p, remaining, "%s: (none)\n", output->name);
+      }
+      if (len > 0 && (size_t)len < remaining) {
+        p += len;
+        remaining -= len;
+        printed++;
+      } else {
+        break;
+      }
+    }
+    if (printed == 0) {
+      snprintf(response_buf, resp_size, "No outputs\n");
+    }
     return 0;
+  }
 
   case IPC_CMD_RELOAD:
-    return daemon_reload_config(daemon);
+    if (daemon_reload_config(daemon) == 0) {
+      snprintf(response_buf, resp_size, "OK\n");
+      return 0;
+    }
+    snprintf(response_buf, resp_size, "ERROR: Failed to reload config\n");
+    return -1;
 
   case IPC_CMD_QUIT:
     daemon->running = false;
+    snprintf(response_buf, resp_size, "OK\n");
     return 0;
 
   default:
+    snprintf(response_buf, resp_size, "ERROR: Unknown command\n");
     return -1;
   }
 }
@@ -211,41 +261,59 @@ int daemon_start(zpaper_daemon_t *daemon) {
           char cmd_str[64] = {0};
           char path_arg[MAX_PATH_LEN] = {0};
           char output_name[128] = {0};
+          char type_str[64] = {0};
+          wallpaper_type_t wallpaper_type = WALLPAPER_TYPE_UNKNOWN;
 
-          char *space1 = strchr(buf, ' ');
-          char *space2 = NULL;
-          if (space1) {
-            *space1 = '\0';
-            space1++;
-            space2 = strchr(space1, ' ');
-            if (space2) {
-              *space2 = '\0';
-              space2++;
+          char *saveptr = NULL;
+          char *token = strtok_r(buf, " ", &saveptr);
+          if (token) {
+            strncpy(cmd_str, token, sizeof(cmd_str) - 1);
+            cmd_str[sizeof(cmd_str) - 1] = '\0';
+          }
+
+          token = strtok_r(NULL, " ", &saveptr);
+          if (token) {
+            if (strncmp(token, "--type=", 7) == 0) {
+              strncpy(type_str, token + 7, sizeof(type_str) - 1);
+              wallpaper_type = wallpaper_type_from_string(type_str);
+            } else {
+              strncpy(path_arg, token, sizeof(path_arg) - 1);
+              path_arg[sizeof(path_arg) - 1] = '\0';
             }
           }
 
-          strncpy(cmd_str, buf, sizeof(cmd_str) - 1);
-          if (space1) {
-            strncpy(path_arg, space1, sizeof(path_arg) - 1);
-            if (path_arg[0] == '~' && path_arg[1] == '/') {
-              const char *home = getenv("HOME");
-              if (home) {
-                char expanded[512];
-                snprintf(expanded, sizeof(expanded), "%s%s", home,
-                         path_arg + 1);
-                strncpy(path_arg, expanded, sizeof(path_arg) - 1);
-              }
+          token = strtok_r(NULL, " ", &saveptr);
+          if (token) {
+            if (strncmp(token, "--type=", 7) == 0) {
+              strncpy(type_str, token + 7, sizeof(type_str) - 1);
+              wallpaper_type = wallpaper_type_from_string(type_str);
+            } else {
+              strncpy(output_name, token, sizeof(output_name) - 1);
+              output_name[sizeof(output_name) - 1] = '\0';
             }
           }
-          if (space2) {
-            strncpy(output_name, space2, sizeof(output_name) - 1);
+
+          token = strtok_r(NULL, " ", &saveptr);
+          if (token && strncmp(token, "--type=", 7) == 0) {
+            strncpy(type_str, token + 7, sizeof(type_str) - 1);
+            wallpaper_type = wallpaper_type_from_string(type_str);
+          }
+
+          if (path_arg[0] == '~' && path_arg[1] == '/') {
+            const char *home = getenv("HOME");
+            if (home) {
+              char expanded[512];
+              snprintf(expanded, sizeof(expanded), "%s%s", home, path_arg + 1);
+              strncpy(path_arg, expanded, sizeof(path_arg) - 1);
+            }
           }
 
           ipc_cmd_t cmd = ipc_parse_cmd(cmd_str);
+          char response[IPC_MAX_MSG_SIZE];
           handle_ipc_command(daemon, cmd, output_name[0] ? output_name : NULL,
-                             path_arg[0] ? path_arg : NULL);
+                             path_arg[0] ? path_arg : NULL, wallpaper_type,
+                             response, sizeof(response));
 
-          const char *response = "OK\n";
           ipc_write_msg(client_fd, response, strlen(response));
         }
         close(client_fd);
@@ -275,9 +343,16 @@ void daemon_free(zpaper_daemon_t *daemon) {
 }
 
 int daemon_set_wallpaper(zpaper_daemon_t *daemon, const char *output_name,
-                         const char *path) {
-  const char *name = output_name ? output_name : "default";
-  return config_set_wallpaper(&daemon->config, name, path);
+                         const char *path, wallpaper_type_t type) {
+  if (output_name) {
+    return config_set_wallpaper(&daemon->config, output_name, path, type);
+  }
+
+  for (int i = 0; i < daemon->wl_state->output_count; i++) {
+    const char *output_name_i = daemon->wl_state->output_infos[i]->name;
+    config_set_wallpaper(&daemon->config, output_name_i, path, type);
+  }
+  return 0;
 }
 
 const char *daemon_get_wallpaper(zpaper_daemon_t *daemon,

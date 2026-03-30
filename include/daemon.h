@@ -21,7 +21,7 @@ int daemon_start(zpaper_daemon_t *daemon);
 void daemon_stop(zpaper_daemon_t *daemon);
 void daemon_free(zpaper_daemon_t *daemon);
 int daemon_set_wallpaper(zpaper_daemon_t *daemon, const char *output_name,
-                         const char *path);
+                         const char *path, wallpaper_type_t type);
 const char *daemon_get_wallpaper(zpaper_daemon_t *daemon,
                                  const char *output_name);
 int daemon_reload_config(zpaper_daemon_t *daemon);

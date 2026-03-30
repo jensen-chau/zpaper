@@ -26,7 +26,7 @@ wallpaper_type_t wallpaper_detect_type(const char *path) {
 
   for (int i = 0; i < image_ext_count; i++) {
     if (strcasecmp(ext, image_extensions[i]) == 0) {
-      return WALLPAPER_TYPE_IMAGE;
+      return WALLPAPER_TYPE_STATIC;
     }
   }
 
@@ -40,8 +40,11 @@ wallpaper_type_t wallpaper_detect_type(const char *path) {
 }
 
 wallpaper_handler_t *wallpaper_create(const char *path,
-                                      struct wayland_state *state) {
-  wallpaper_type_t type = wallpaper_detect_type(path);
+                                      struct wayland_state *state,
+                                      wallpaper_type_t explicit_type) {
+  wallpaper_type_t type = (explicit_type != WALLPAPER_TYPE_UNKNOWN)
+                              ? explicit_type
+                              : wallpaper_detect_type(path);
 
   wallpaper_handler_t *handler = calloc(1, sizeof(wallpaper_handler_t));
   if (!handler) {
@@ -53,7 +56,7 @@ wallpaper_handler_t *wallpaper_create(const char *path,
   handler->state = state;
 
   switch (type) {
-  case WALLPAPER_TYPE_IMAGE:
+  case WALLPAPER_TYPE_STATIC:
     if (image_handler_init(handler, path) != 0) {
       free(handler);
       return NULL;
@@ -62,6 +65,16 @@ wallpaper_handler_t *wallpaper_create(const char *path,
 
   case WALLPAPER_TYPE_VIDEO:
     ERR("video wallpaper not yet implemented");
+    free(handler);
+    return NULL;
+
+  case WALLPAPER_TYPE_WEB:
+    ERR("web wallpaper not yet implemented");
+    free(handler);
+    return NULL;
+
+  case WALLPAPER_TYPE_VULKAN:
+    ERR("vulkan wallpaper not yet implemented");
     free(handler);
     return NULL;
 

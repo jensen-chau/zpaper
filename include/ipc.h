@@ -1,6 +1,7 @@
 #ifndef ZPAPER_IPC_H
 #define ZPAPER_IPC_H
 
+#include "wallpaper.h"
 #include <stddef.h>
 
 #define IPC_SOCKET_NAME "zpaper.sock"
@@ -21,6 +22,7 @@ typedef struct {
   ipc_cmd_t cmd;
   char *wallpaper_path;
   char *output_name;
+  wallpaper_type_t wallpaper_type;
   char *payload;
   size_t payload_size;
 } ipc_request_t;

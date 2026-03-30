@@ -59,6 +59,7 @@ const char *config_get_default_path(void) {
 
 void config_init(zpaper_config_t *config) {
   memset(config, 0, sizeof(*config));
+  config->default_type = WALLPAPER_TYPE_UNKNOWN;
 }
 
 void config_free(zpaper_config_t *config) {
@@ -119,10 +120,16 @@ int config_load(const char *path, zpaper_config_t *config) {
   }
 
   char path_buf[MAX_PATH_LEN];
+  char type_buf[64];
   if (stbj_read_string_name(&cursor, "default", path_buf, sizeof(path_buf),
                             "") > 0 &&
       path_buf[0] != '\0') {
     config->default_wallpaper = safe_strdup(path_buf);
+  }
+
+  if (stbj_read_string_name(&cursor, "default_type", type_buf, sizeof(type_buf),
+                            "") > 0) {
+    config->default_type = wallpaper_type_from_string(type_buf);
   }
 
   stbj_cursor outputs_cursor = stbj_move_cursor_name(&cursor, "outputs");
@@ -148,6 +155,10 @@ int config_load(const char *path, zpaper_config_t *config) {
           if (stbj_read_string_name(&value_cursor, "wallpaper", path_buf,
                                     sizeof(path_buf), "") > 0) {
             config->outputs[i].wallpaper_path = safe_strdup(path_buf);
+          }
+          if (stbj_read_string_name(&value_cursor, "type", type_buf,
+                                    sizeof(type_buf), "") > 0) {
+            config->outputs[i].type = wallpaper_type_from_string(type_buf);
           }
         }
       }
@@ -177,6 +188,9 @@ int config_save(const char *path, const zpaper_config_t *config) {
   fprintf(f, "  \"default\": \"%s\"\n",
           config->default_wallpaper ? config->default_wallpaper : "");
   fprintf(f, ",\n");
+  fprintf(f, "  \"default_type\": \"%s\"\n",
+          wallpaper_type_to_string(config->default_type));
+  fprintf(f, ",\n");
   fprintf(f, "  \"outputs\": {\n");
 
   for (int i = 0; i < config->output_count; i++) {
@@ -186,6 +200,8 @@ int config_save(const char *path, const zpaper_config_t *config) {
             config->outputs[i].wallpaper_path
                 ? config->outputs[i].wallpaper_path
                 : "");
+    fprintf(f, "      ,\"type\": \"%s\"\n",
+            wallpaper_type_to_string(config->outputs[i].type));
     fprintf(f, "    }%s\n", (i < config->output_count - 1) ? "," : "");
   }
 
@@ -197,7 +213,7 @@ int config_save(const char *path, const zpaper_config_t *config) {
 }
 
 int config_set_wallpaper(zpaper_config_t *config, const char *output_name,
-                         const char *path) {
+                         const char *path, wallpaper_type_t type) {
   if (!config || !path) {
     return -1;
   }
@@ -205,6 +221,7 @@ int config_set_wallpaper(zpaper_config_t *config, const char *output_name,
   if (strcmp(output_name, "default") == 0 || output_name[0] == '\0') {
     free(config->default_wallpaper);
     config->default_wallpaper = safe_strdup(path);
+    config->default_type = type;
     for (int i = 0; i < config->output_count; i++) {
       free(config->outputs[i].name);
       free(config->outputs[i].wallpaper_path);
@@ -220,8 +237,10 @@ int config_set_wallpaper(zpaper_config_t *config, const char *output_name,
         strcmp(config->outputs[i].name, output_name) == 0) {
       free(config->outputs[i].wallpaper_path);
       config->outputs[i].wallpaper_path = safe_strdup(path);
+      config->outputs[i].type = type;
       free(config->default_wallpaper);
       config->default_wallpaper = safe_strdup(path);
+      config->default_type = type;
       return 0;
     }
   }
@@ -233,15 +252,21 @@ int config_set_wallpaper(zpaper_config_t *config, const char *output_name,
   int idx = config->output_count++;
   config->outputs[idx].name = safe_strdup(output_name);
   config->outputs[idx].wallpaper_path = safe_strdup(path);
+  config->outputs[idx].type = type;
   free(config->default_wallpaper);
   config->default_wallpaper = safe_strdup(path);
+  config->default_type = type;
   return 0;
 }
 
 const char *config_get_wallpaper(const zpaper_config_t *config,
                                  const char *output_name) {
-  if (!config || !output_name) {
+  if (!config) {
     return NULL;
+  }
+
+  if (!output_name) {
+    return config->default_wallpaper;
   }
 
   for (int i = 0; i < config->output_count; i++) {
@@ -252,4 +277,24 @@ const char *config_get_wallpaper(const zpaper_config_t *config,
   }
 
   return config->default_wallpaper;
+}
+
+wallpaper_type_t config_get_wallpaper_type(const zpaper_config_t *config,
+                                           const char *output_name) {
+  if (!config) {
+    return WALLPAPER_TYPE_UNKNOWN;
+  }
+
+  if (!output_name) {
+    return config->default_type;
+  }
+
+  for (int i = 0; i < config->output_count; i++) {
+    if (config->outputs[i].name &&
+        strcmp(config->outputs[i].name, output_name) == 0) {
+      return config->outputs[i].type;
+    }
+  }
+
+  return config->default_type;
 }
