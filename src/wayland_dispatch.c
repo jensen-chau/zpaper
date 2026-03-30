@@ -30,10 +30,7 @@ void global(void *data, struct wl_registry *wl_registry, uint32_t name,
     LOG("zwp_linux_dmabuf_v1_interface binded");
   } else if (strcmp(interface, wl_output_interface.name) == 0) {
     struct output_info *output_info =
-        (struct output_info *)malloc(sizeof(struct output_info));
-    output_info->name = NULL;
-    output_info->description = NULL;
-    output_info->scale = 0;
+        (struct output_info *)calloc(1, sizeof(struct output_info));
     output_info->output =
         wl_registry_bind(wl_registry, name, &wl_output_interface, version);
     wl_output_add_listener(output_info->output, &wl_output_listener, state);
@@ -47,7 +44,6 @@ void global(void *data, struct wl_registry *wl_registry, uint32_t name,
     state->viewporter =
         wl_registry_bind(wl_registry, name, &wp_viewporter_interface, version);
     LOG("wp_viewporter_interface binded");
-  
   }
 }
 
@@ -82,47 +78,46 @@ struct zwlr_layer_surface_v1_listener zwlr_layer_surface_v1_listener = {
 void geometry(void *data, struct wl_output *wl_output, int32_t x, int32_t y,
               int32_t physical_width, int32_t physical_height, int32_t subpixel,
               const char *make, const char *model, int32_t transform) {
-    struct wayland_state* state = (struct wayland_state*)data;
-    for (int i = 0; i < state->output_count; i++) {
-        if (state->output_infos[i]->output == wl_output) {
-        
-        }
+  struct wayland_state *state = (struct wayland_state *)data;
+  for (int i = 0; i < state->output_count; i++) {
+    if (state->output_infos[i]->output == wl_output) {
     }
+  }
 }
 
 void mode(void *data, struct wl_output *wl_output, uint32_t flags,
           int32_t width, int32_t height, int32_t refresh) {
-    struct wayland_state* state = (struct wayland_state*)data;
-    for (int i = 0; i < state->output_count; i++) {
-        if (state->output_infos[i]->output == wl_output) {
-            state->output_infos[i]->width = width;
-            state->output_infos[i]->height = height;
-            LOG("wl_output mode event: %dx%d", width, height);
-            return;
-        }
+  struct wayland_state *state = (struct wayland_state *)data;
+  for (int i = 0; i < state->output_count; i++) {
+    if (state->output_infos[i]->output == wl_output) {
+      state->output_infos[i]->width = width;
+      state->output_infos[i]->height = height;
+      LOG("wl_output mode event: %dx%d", width, height);
+      return;
     }
+  }
 }
 void done(void *data, struct wl_output *wl_output) {}
 void scale(void *data, struct wl_output *wl_output, int32_t factor) {}
 void name(void *data, struct wl_output *wl_output, const char *name) {
-    struct wayland_state* state = (struct wayland_state*)data;
-    for (int i = 0; i < state->output_count; i++) {
-        if (state->output_infos[i]->output == wl_output) {
-            state->output_infos[i]->name = strdup(name);   
-            LOG("wl_output name event: %s", name);
-            return;
-        }
+  struct wayland_state *state = (struct wayland_state *)data;
+  for (int i = 0; i < state->output_count; i++) {
+    if (state->output_infos[i]->output == wl_output) {
+      state->output_infos[i]->name = strdup(name);
+      LOG("wl_output name event: %s", name);
+      return;
     }
+  }
 }
 void description(void *data, struct wl_output *wl_output,
                  const char *description) {
-    struct wayland_state* state = (struct wayland_state*)data;
-    for (int i = 0; i < state->output_count; i++) {
-        if (state->output_infos[i]->output == wl_output) {
-            state->output_infos[i]->description = strdup(description);
-            LOG("wl_output description event: %s", description);
-        }
+  struct wayland_state *state = (struct wayland_state *)data;
+  for (int i = 0; i < state->output_count; i++) {
+    if (state->output_infos[i]->output == wl_output) {
+      state->output_infos[i]->description = strdup(description);
+      LOG("wl_output description event: %s", description);
     }
+  }
 }
 struct wl_output_listener wl_output_listener = {
     .done = done,
