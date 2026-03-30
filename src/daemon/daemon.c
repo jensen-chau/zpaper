@@ -82,6 +82,7 @@ static int handle_ipc_command(zpaper_daemon_t *daemon, ipc_cmd_t cmd,
   switch (cmd) {
   case IPC_CMD_SET:
     if (daemon_set_wallpaper(daemon, output_name, wallpaper_path) == 0) {
+      config_save(config_get_default_path(), &daemon->config);
       daemon_render_all(daemon);
       wl_display_flush(daemon->wl_state->display);
       return 0;
@@ -129,7 +130,15 @@ int daemon_init(zpaper_daemon_t *daemon) {
 
   config_init(&daemon->config);
   const char *config_path = config_get_default_path();
-  config_load(config_path, &daemon->config);
+  if (config_load(config_path, &daemon->config) != 0) {
+    config_init(&daemon->config);
+    const char *home = getenv("HOME");
+    char default_path[512];
+    snprintf(default_path, sizeof(default_path), "%s/Pictures/wallpaper/01.jpg",
+             home ? home : "/tmp");
+    config_set_wallpaper(&daemon->config, "default", default_path);
+    config_save(config_path, &daemon->config);
+  }
 
   return 0;
 }
