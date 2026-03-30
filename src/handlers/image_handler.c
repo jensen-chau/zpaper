@@ -66,11 +66,13 @@ static void image_handler_destroy(wallpaper_handler_t *handler) {
 static int image_handler_render(wallpaper_handler_t *handler,
                                 struct output_info *output_info) {
   if (!handler || !output_info) {
+    fprintf(stderr, "DEBUG render: handler or output_info is NULL\n");
     return -1;
   }
 
   image_data_t *img = (image_data_t *)handler->data;
   if (!img || !img->data) {
+    fprintf(stderr, "DEBUG render: img or img->data is NULL\n");
     return -1;
   }
 

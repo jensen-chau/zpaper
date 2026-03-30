@@ -130,15 +130,7 @@ int daemon_init(zpaper_daemon_t *daemon) {
 
   config_init(&daemon->config);
   const char *config_path = config_get_default_path();
-  if (config_load(config_path, &daemon->config) != 0) {
-    config_init(&daemon->config);
-    const char *home = getenv("HOME");
-    char default_path[512];
-    snprintf(default_path, sizeof(default_path), "%s/Pictures/wallpaper/01.jpg",
-             home ? home : "/tmp");
-    config_set_wallpaper(&daemon->config, "default", default_path);
-    config_save(config_path, &daemon->config);
-  }
+  config_load(config_path, &daemon->config);
 
   return 0;
 }
