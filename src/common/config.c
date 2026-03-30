@@ -220,6 +220,8 @@ int config_set_wallpaper(zpaper_config_t *config, const char *output_name,
         strcmp(config->outputs[i].name, output_name) == 0) {
       free(config->outputs[i].wallpaper_path);
       config->outputs[i].wallpaper_path = safe_strdup(path);
+      free(config->default_wallpaper);
+      config->default_wallpaper = safe_strdup(path);
       return 0;
     }
   }
@@ -231,6 +233,8 @@ int config_set_wallpaper(zpaper_config_t *config, const char *output_name,
   int idx = config->output_count++;
   config->outputs[idx].name = safe_strdup(output_name);
   config->outputs[idx].wallpaper_path = safe_strdup(path);
+  free(config->default_wallpaper);
+  config->default_wallpaper = safe_strdup(path);
   return 0;
 }
 
