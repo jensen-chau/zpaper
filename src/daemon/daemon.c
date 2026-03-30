@@ -170,7 +170,9 @@ int daemon_start(zpaper_daemon_t *daemon) {
     wl_display_dispatch(daemon->wl_state->display);
   }
 
-  daemon_render_all(daemon);
+  if (daemon->config.default_wallpaper || daemon->config.output_count > 0) {
+    daemon_render_all(daemon);
+  }
 
   daemon->running = true;
   while (daemon->running) {
