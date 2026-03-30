@@ -1,75 +1,85 @@
-TARGET = zpaper
+TARGETS = zpaper zpaperd
 CC = gcc
 BUILD_DIR = build
 PROTOCOL_DIR = protocol
-SRC_DIR = src
 
-# 源文件和对象文件
-SRC = $(wildcard $(SRC_DIR)/*.c)
-OBJ = $(addprefix $(BUILD_DIR)/, $(SRC:$(SRC_DIR)/%.c=%.o))
-
-# Wayland 协议处理
 WAYLAND_PROTOCOLS = $(wildcard $(PROTOCOL_DIR)/*.xml)
 PROTOCOL_C = $(addprefix $(BUILD_DIR)/, $(WAYLAND_PROTOCOLS:$(PROTOCOL_DIR)/%.xml=%-protocol.c))
 PROTOCOL_H = $(addprefix $(BUILD_DIR)/, $(WAYLAND_PROTOCOLS:$(PROTOCOL_DIR)/%.xml=%-protocol.h))
 
-# 头文件路径
 INCLUDE = -I $(BUILD_DIR) -I include
 
-# 库
 LIBS = -lwayland-client -lm
 
-# 编译标志
-FLAGS = -Wall -Werror -Wextra -Wno-unused-parameter -Wno-unused-function
+FLAGS = -Wall -Werror -Wextra -Wno-unused-parameter -Wno-unused-function -Wno-misleading-indentation -Wno-implicit-fallthrough
 CFLAGS = -g -O0 $(INCLUDE) $(FLAGS) -MMD -MP
 
-# 默认目标
 .PHONY: all clean install uninstall
 
-# 标记生成的协议文件为珍贵文件，防止 make 自动删除
 .PRECIOUS: $(PROTOCOL_C) $(PROTOCOL_H)
 
-all: $(TARGET) | $(BUILD_DIR)
+all: $(TARGETS) | $(BUILD_DIR)
 
-# 创建构建目录
 $(BUILD_DIR):
-	@mkdir -p $@
+	@mkdir -p $@ $(BUILD_DIR)/src/client $(BUILD_DIR)/src/daemon $(BUILD_DIR)/src/common $(BUILD_DIR)/src/handlers
 
-# 处理 Wayland 协议 XML 文件
 $(BUILD_DIR)/%-protocol.c: $(PROTOCOL_DIR)/%.xml | $(BUILD_DIR)
 	wayland-scanner private-code < $< > $@
 
 $(BUILD_DIR)/%-protocol.h: $(PROTOCOL_DIR)/%.xml | $(BUILD_DIR)
 	wayland-scanner client-header < $< > $@
 
-# 编译对象文件
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c $(PROTOCOL_H) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-# 编译协议对象文件
 $(BUILD_DIR)/%-protocol.o: $(BUILD_DIR)/%-protocol.c $(BUILD_DIR)/%-protocol.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# 链接最终目标程序
-$(TARGET): $(OBJ) $(PROTOCOL_C:.c=.o)
+COMMON_SRC = src/common/ipc.c src/common/config.c
+HANDLERS_SRC = src/handlers/wallpaper.c src/handlers/image_handler.c
+DAEMON_SRC = src/daemon/main.c src/daemon/daemon.c
+CLIENT_SRC = src/client/main.c
+WAYLAND_SRC = src/wayland_state.c src/wayland_dispatch.c src/wl_shm_pool.c
+
+DAEMON_OBJ = $(COMMON_SRC) $(HANDLERS_SRC) $(WAYLAND_SRC) $(DAEMON_SRC)
+DAEMON_OBJ := $(addprefix $(BUILD_DIR)/, $(DAEMON_SRC:src/%=%.o) $(COMMON_SRC:src/%=%.o) $(HANDLERS_SRC:src/%=%.o) $(WAYLAND_SRC:src/%=%.o))
+
+CLIENT_OBJ = $(COMMON_SRC) $(CLIENT_SRC)
+CLIENT_OBJ := $(addprefix $(BUILD_DIR)/, $(CLIENT_SRC:src/%=%.o) $(COMMON_SRC:src/%=%.o))
+
+$(BUILD_DIR)/src/client/%.o: src/client/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/src/daemon/%.o: src/daemon/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/src/common/%.o: src/common/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/src/handlers/%.o: src/handlers/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/src/%.o: src/%.c $(PROTOCOL_H) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+zpaperd: $(BUILD_DIR)/src/daemon/main.o $(BUILD_DIR)/src/daemon/daemon.o $(BUILD_DIR)/src/common/ipc.o $(BUILD_DIR)/src/common/config.o $(BUILD_DIR)/src/handlers/wallpaper.o $(BUILD_DIR)/src/handlers/image_handler.o $(BUILD_DIR)/src/wayland_state.o $(BUILD_DIR)/src/wayland_dispatch.o $(BUILD_DIR)/src/wl_shm_pool.o $(PROTOCOL_C:.c=.o)
 	$(CC) $^ $(LIBS) -o $@
-	@echo "构建成功：$(TARGET)"
+	@echo "Built: zpaperd"
 
-# 清理构建产物（保留生成的 protocol 代码和头文件）
+zpaper: $(BUILD_DIR)/src/client/main.o $(BUILD_DIR)/src/common/ipc.o $(PROTOCOL_C:.c=.o)
+	$(CC) $^ $(LIBS) -o $@
+	@echo "Built: zpaper"
+
 clean:
-	@rm -f $(TARGET)
+	@rm -f $(TARGETS)
 	@rm -rf $(BUILD_DIR)
-	@echo "清理完成"
+	@echo "Clean complete"
 
-# 包含依赖文件
--include $(OBJ:.o=.d)
+-include $(OBJ:.o=.d) $(DAEMON_OBJ:.o=.d) $(CLIENT_OBJ:.o=.d)
 
-# 安装到系统目录
-install: $(TARGET)
-	@install -Dm755 $(TARGET) $(DESTDIR)/usr/local/bin/$(TARGET)
-	@echo "已安装到 $(DESTDIR)/usr/local/bin/$(TARGET)"
+install: $(TARGETS)
+	@install -Dm755 zpaper $(DESTDIR)/usr/local/bin/zpaper
+	@install -Dm755 zpaperd $(DESTDIR)/usr/local/bin/zpaperd
+	@echo "Installed to $(DESTDIR)/usr/local/bin/"
 
-# 从系统目录卸载
 uninstall:
-	@rm -f $(DESTDIR)/usr/local/bin/$(TARGET)
-	@echo "已卸载 $(DESTDIR)/usr/local/bin/$(TARGET)"
+	@rm -f $(DESTDIR)/usr/local/bin/zpaper
+	@rm -f $(DESTDIR)/usr/local/bin/zpaperd
+	@echo "Uninstalled"
